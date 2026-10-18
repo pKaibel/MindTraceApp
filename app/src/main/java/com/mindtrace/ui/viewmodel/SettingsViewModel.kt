@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mindtrace.data.repository.TestDataRepository
 import com.mindtrace.util.LanguageMode
+import com.mindtrace.util.Mascot
 import com.mindtrace.util.MindTraceSettingsStore
 import com.mindtrace.util.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +24,8 @@ class SettingsViewModel(
     fun setVibrationEnabled(enabled: Boolean) = settingsStore.setVibrationEnabled(enabled)
     fun setThemeMode(mode: ThemeMode) = settingsStore.setThemeMode(mode)
     fun setLanguageMode(mode: LanguageMode) = settingsStore.setLanguageMode(mode)
+    fun setUserName(name: String) = settingsStore.setUserName(name)
+    fun setMascot(mascot: Mascot) = settingsStore.setMascot(mascot)
 
     fun addTestData() = viewModelScope.launch {
         val language = settingsStore.read().languageMode

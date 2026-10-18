@@ -21,6 +21,8 @@ class MedicationRepository(
 ) {
     fun observeReminders(): Flow<List<MedicationReminderEntity>> = reminderDao.observeAll()
     fun observeIntakes(date: LocalDate): Flow<List<com.mindtrace.data.local.entity.MedicationIntakeEntity>> = intakeDao.observeForDate(date)
+    fun observeIntakes(startDate: LocalDate, endDate: LocalDate): Flow<List<com.mindtrace.data.local.entity.MedicationIntakeEntity>> =
+        intakeDao.observeForDateRange(startDate, endDate)
 
     suspend fun create(
         name: String,

@@ -17,7 +17,11 @@ import com.mindtrace.data.local.entity.MoodEntryEntity
 import com.mindtrace.ui.i18n.LocalMindTraceStrings
 
 @Composable
-fun MoodChart(entries: List<MoodEntryEntity>, modifier: Modifier = Modifier) {
+fun MoodChart(
+    entries: List<MoodEntryEntity>,
+    valueFor: (MoodEntryEntity) -> Int,
+    modifier: Modifier = Modifier
+) {
     val strings = LocalMindTraceStrings.current
     val primary = MaterialTheme.colorScheme.primary
     val outline = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
@@ -41,7 +45,7 @@ fun MoodChart(entries: List<MoodEntryEntity>, modifier: Modifier = Modifier) {
         val span = (sorted.last().recordedAt.toEpochMilli() - min).coerceAtLeast(1)
         fun point(entry: MoodEntryEntity): Offset {
             val x = left + ((entry.recordedAt.toEpochMilli() - min).toFloat() / span) * (right - left)
-            val y = bottom - ((entry.moodValue - 1).toFloat() / 4f) * (bottom - top)
+            val y = bottom - ((valueFor(entry) - 1).toFloat() / 4f) * (bottom - top)
             return Offset(x, y)
         }
         if (sorted.size == 1) {

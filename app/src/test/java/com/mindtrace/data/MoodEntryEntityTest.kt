@@ -14,4 +14,14 @@ class MoodEntryEntityTest {
     fun moodValueAboveRangeIsRejected() {
         MoodEntryEntity(moodValue = 6, note = null, recordedAt = Instant.now())
     }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun physicalWellbeingBelowRangeIsRejected() {
+        MoodEntryEntity(moodValue = 3, physicalWellbeing = 0, note = null, recordedAt = Instant.now())
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun mentalWellbeingAboveRangeIsRejected() {
+        MoodEntryEntity(moodValue = 3, mentalWellbeing = 6, note = null, recordedAt = Instant.now())
+    }
 }

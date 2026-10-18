@@ -18,6 +18,9 @@ interface MedicationIntakeDao {
     @Query("SELECT * FROM medication_intakes WHERE scheduledDate = :date")
     fun observeForDate(date: LocalDate): Flow<List<MedicationIntakeEntity>>
 
+    @Query("SELECT * FROM medication_intakes WHERE scheduledDate BETWEEN :startDate AND :endDate")
+    fun observeForDateRange(startDate: LocalDate, endDate: LocalDate): Flow<List<MedicationIntakeEntity>>
+
     @Query("SELECT * FROM medication_intakes WHERE reminderId = :reminderId AND scheduledDateTime = :scheduledDateTime LIMIT 1")
     suspend fun getForSchedule(reminderId: Long, scheduledDateTime: Instant): MedicationIntakeEntity?
 

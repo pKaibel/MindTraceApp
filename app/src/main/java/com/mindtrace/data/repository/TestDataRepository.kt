@@ -39,6 +39,8 @@ class TestDataRepository(
             moodDao.insert(
                 MoodEntryEntity(
                     moodValue = value,
+                    physicalWellbeing = value,
+                    mentalWellbeing = (value + 1).coerceAtMost(5),
                     note = note,
                     recordedAt = now.minusSeconds((index * 28L + 3L) * 60L * 60L)
                 )

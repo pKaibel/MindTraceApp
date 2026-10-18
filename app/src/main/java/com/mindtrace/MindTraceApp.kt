@@ -10,7 +10,11 @@ class MindTraceApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        NotificationHelper.createMedicationChannel(this)
         container = AppContainer(this)
+        NotificationHelper.createChannels(this)
+        val settings = container.settingsStore.read()
+        if (settings.moodReminderEnabled) {
+            container.moodAlarmScheduler.schedule(settings.moodReminderTime)
+        }
     }
 }

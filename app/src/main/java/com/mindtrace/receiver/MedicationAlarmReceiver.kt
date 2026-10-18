@@ -11,6 +11,22 @@ import kotlinx.coroutines.launch
 
 class MedicationAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.getBooleanExtra(EXTRA_MOOD_REMINDER, false)) {
+            val pending = goAsync()
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val container = (context.applicationContext as MindTraceApp).container
+                    val settings = container.settingsStore.read()
+                    if (settings.moodReminderEnabled) {
+                        NotificationHelper.showMoodReminder(context)
+                        container.moodAlarmScheduler.schedule(settings.moodReminderTime)
+                    }
+                } finally {
+                    pending.finish()
+                }
+            }
+            return
+        }
         val reminderId = intent.getLongExtra(EXTRA_REMINDER_ID, -1L)
         if (reminderId <= 0L) return
         val pending = goAsync()
@@ -30,5 +46,6 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
 
     companion object {
         const val EXTRA_REMINDER_ID = "extra_reminder_id"
+        const val EXTRA_MOOD_REMINDER = "extra_mood_reminder"
     }
 }

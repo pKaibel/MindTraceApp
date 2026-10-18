@@ -26,7 +26,7 @@ object NotificationHelper {
     const val ACTION_TAKEN = "com.mindtrace.action.TAKEN"
     const val EXTRA_REMINDER_ID = "reminder_id"
 
-    fun createMedicationChannel(context: Context) {
+    fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
             val attrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build()
@@ -52,10 +52,59 @@ object NotificationHelper {
                         description = "Erinnerungen ohne Ton und Vibration"
                         enableVibration(false)
                         setSound(null, null)
+                    },
+                    NotificationChannel(MOOD_CHANNEL_SOUND_VIBRATION, "Stimmungserinnerungen", NotificationManager.IMPORTANCE_HIGH).apply {
+                        description = "Erinnerungen mit Ton und Vibration"
+                        enableVibration(true)
+                        setSound(sound, attrs)
+                    },
+                    NotificationChannel(MOOD_CHANNEL_SOUND, "Stimmungserinnerungen mit Ton", NotificationManager.IMPORTANCE_HIGH).apply {
+                        description = "Erinnerungen mit Ton ohne Vibration"
+                        enableVibration(false)
+                        setSound(sound, attrs)
+                    },
+                    NotificationChannel(MOOD_CHANNEL_VIBRATION, "Stimmungserinnerungen mit Vibration", NotificationManager.IMPORTANCE_HIGH).apply {
+                        description = "Erinnerungen ohne Ton mit Vibration"
+                        enableVibration(true)
+                        setSound(null, null)
+                    },
+                    NotificationChannel(MOOD_CHANNEL_SILENT, "Stille Stimmungserinnerungen", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                        description = "Erinnerungen ohne Ton und Vibration"
+                        enableVibration(false)
+                        setSound(null, null)
                     }
                 )
             )
         }
+    }
+
+    fun showMoodReminder(context: Context) {
+        val settings = MindTraceSettingsStore(context).read()
+        if (!settings.notificationsEnabled) return
+        val english = settings.languageMode == LanguageMode.EN
+        val channelId = moodChannelId(settings.soundEnabled, settings.vibrationEnabled)
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            MOOD_NOTIFICATION_ID,
+            Intent(context, MainActivity::class.java)
+                .putExtra(EXTRA_OPEN_MOOD, true)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val defaults = (if (settings.soundEnabled) NotificationCompat.DEFAULT_SOUND else 0) or
+            (if (settings.vibrationEnabled) NotificationCompat.DEFAULT_VIBRATE else 0)
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(if (english) "How are you feeling?" else "Wie geht es dir?")
+            .setContentText(if (english) "Take a moment to record your mood." else "Nimm dir einen Moment, um deine Stimmung einzutragen.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setDefaults(defaults)
+            .setSilent(!settings.soundEnabled && !settings.vibrationEnabled)
+            .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .build()
+        NotificationManagerCompat.from(context).notify(MOOD_NOTIFICATION_ID, notification)
     }
 
     fun showMedicationReminder(context: Context, reminder: MedicationReminderEntity) {
@@ -104,4 +153,19 @@ object NotificationHelper {
     fun dismiss(context: Context, reminderId: Long) {
         NotificationManagerCompat.from(context).cancel(reminderId.toInt())
     }
+
+    private fun moodChannelId(soundEnabled: Boolean, vibrationEnabled: Boolean): String = when {
+        soundEnabled && vibrationEnabled -> MOOD_CHANNEL_SOUND_VIBRATION
+        soundEnabled -> MOOD_CHANNEL_SOUND
+        vibrationEnabled -> MOOD_CHANNEL_VIBRATION
+        else -> MOOD_CHANNEL_SILENT
+    }
+
+    const val EXTRA_OPEN_MOOD = "open_mood"
+
+    private const val MOOD_NOTIFICATION_ID = 80_001
+    private const val MOOD_CHANNEL_SOUND_VIBRATION = "mood_reminders_sound_vibration"
+    private const val MOOD_CHANNEL_SOUND = "mood_reminders_sound"
+    private const val MOOD_CHANNEL_VIBRATION = "mood_reminders_vibration"
+    private const val MOOD_CHANNEL_SILENT = "mood_reminders_silent"
 }

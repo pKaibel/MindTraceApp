@@ -27,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -50,23 +51,43 @@ import com.mindtrace.ui.viewmodel.MoodViewModel
 import com.mindtrace.ui.viewmodel.SettingsViewModel
 import com.mindtrace.ui.viewmodel.TodayViewModel
 import com.mindtrace.ui.viewmodel.ViewModelFactory
+import com.mindtrace.util.OnboardingReason
+import com.mindtrace.util.Mascot
 
 class MainActivity : ComponentActivity() {
+    private var moodEntryRequest by mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent.getBooleanExtra(com.mindtrace.notification.NotificationHelper.EXTRA_OPEN_MOOD, false)) {
+            moodEntryRequest++
+        }
         val container = (application as MindTraceApp).container
         val factory = ViewModelFactory(
             container.moodRepository,
             container.medicationRepository,
             container.alarmScheduler,
+            container.moodAlarmScheduler,
             container.settingsStore,
             container.testDataRepository
         )
+        val startDestination = if (moodEntryRequest > 0) {
+            MindTraceRoute.Mood.route
+        } else {
+            MindTraceRoute.Today.route
+        }
         setContent {
             val settings by container.settingsStore.settings.collectAsState()
             val versionCode = remember { currentVersionCode() }
+            val onboardingReason = remember(versionCode) {
+                container.settingsStore.onboardingReason(versionCode)
+            }
             var showOnboarding by remember(versionCode) {
-                mutableStateOf(container.settingsStore.shouldShowOnboarding(versionCode))
+                mutableStateOf(
+                    onboardingReason != null ||
+                        settings.userName.isNullOrBlank() ||
+                        !settings.hasSelectedMascot
+                )
             }
             val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
             LaunchedEffect(showOnboarding) {
@@ -78,7 +99,12 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalMindTraceStrings provides stringsFor(settings.languageMode)) {
                     if (showOnboarding) {
                         OnboardingScreen(
-                            onFinish = {
+                            reason = onboardingReason ?: OnboardingReason.APP_UPDATE,
+                            initialName = settings.userName,
+                            initialMascot = settings.mascot.takeIf { settings.hasSelectedMascot },
+                            onFinish = { userName, mascot ->
+                                container.settingsStore.setUserName(userName)
+                                container.settingsStore.setMascot(mascot)
                                 container.settingsStore.markOnboardingShown(versionCode)
                                 showOnboarding = false
                             }
@@ -86,6 +112,11 @@ class MainActivity : ComponentActivity() {
                     } else {
                         MindTraceAppContent(
                             factory = factory,
+                            startDestination = startDestination,
+                            moodEntryRequest = moodEntryRequest,
+                            onMoodEntryRequestHandled = { moodEntryRequest-- },
+                            userName = settings.userName,
+                            mascot = settings.mascot,
                             openExactAlarmSettings = {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                     startActivity(Intent(AndroidSettings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
@@ -95,6 +126,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(com.mindtrace.notification.NotificationHelper.EXTRA_OPEN_MOOD, false)) {
+            moodEntryRequest++
         }
     }
 
@@ -112,11 +151,24 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun MindTraceAppContent(
     factory: ViewModelFactory,
+    startDestination: String,
+    moodEntryRequest: Int,
+    onMoodEntryRequestHandled: () -> Unit,
+    userName: String?,
+    mascot: Mascot,
     openExactAlarmSettings: () -> Unit
 ) {
     val navController = rememberNavController()
     val items = listOf(MindTraceRoute.Today, MindTraceRoute.Mood, MindTraceRoute.Medication, MindTraceRoute.Settings)
     val strings = LocalMindTraceStrings.current
+    LaunchedEffect(moodEntryRequest) {
+        if (moodEntryRequest > 0) {
+            navController.navigate(MindTraceRoute.Mood.route) {
+                popUpTo(MindTraceRoute.Today.route) { inclusive = false }
+                launchSingleTop = true
+            }
+        }
+    }
     Scaffold(
         bottomBar = {
             val backStack = navController.currentBackStackEntryAsState().value
@@ -133,9 +185,8 @@ private fun MindTraceAppContent(
                         selected = selected,
                         onClick = {
                             navController.navigate(route.route) {
-                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                popUpTo(MindTraceRoute.Today.route) { inclusive = false }
                                 launchSingleTop = true
-                                restoreState = true
                             }
                         },
                         icon = {
@@ -157,16 +208,27 @@ private fun MindTraceAppContent(
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = MindTraceRoute.Today.route,
+            startDestination = startDestination,
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(MindTraceRoute.Today.route) {
-                val vm: TodayViewModel = viewModel(factory = factory)
-                TodayScreen(viewModel = vm, onOpenMood = { navController.navigate(MindTraceRoute.Mood.route) })
+                val todayViewModel: TodayViewModel = viewModel(factory = factory)
+                val moodViewModel: MoodViewModel = viewModel(factory = factory)
+                TodayScreen(
+                    viewModel = todayViewModel,
+                    userName = userName,
+                    mascot = mascot,
+                    onSaveMood = moodViewModel::save
+                )
             }
             composable(MindTraceRoute.Mood.route) {
                 val vm: MoodViewModel = viewModel(factory = factory)
-                MoodScreen(viewModel = vm)
+                MoodScreen(
+                    viewModel = vm,
+                    mascot = mascot,
+                    openNewEntryRequest = moodEntryRequest,
+                    onNewEntryRequestHandled = onMoodEntryRequestHandled
+                )
             }
             composable(MindTraceRoute.Medication.route) {
                 val vm: MedicationViewModel = viewModel(factory = factory)

@@ -1,0 +1,24 @@
+# Android- und Gradle-Buildausgaben (einschließlich erzeugter APKs und Testberichte)
+.gradle/
+.kotlin/
+build/
+app/build/
+*.apk
+*.aab
+
+# Lokale Android-/IDE-Konfiguration
+local.properties
+.idea/
+*.iml
+
+# Temporäre Dateien und Protokolle aus Tests, Builds und manuellen Prüfungen
+*.log
+*.exit
+*.tmp
+*.temp
+*.hprof
+*.bak
+
+# Manuell erzeugte Testartefakte
+test-results/
+screenshots/

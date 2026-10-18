@@ -56,7 +56,7 @@ fun MedicationSkipDialog(onDismiss: () -> Unit, onConfirm: (MedicationSkipReason
             Button(
                 enabled = selectedReason != null,
                 onClick = { selectedReason?.let { reason -> onConfirm(reason, otherReasonNote) } }
-            ) { Text(strings.saveNotTaken) }
+            ) { Text(strings.skipMedication) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(strings.cancel) } }
     )

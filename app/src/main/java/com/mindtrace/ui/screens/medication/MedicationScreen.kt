@@ -1,6 +1,8 @@
 package com.mindtrace.ui.screens.medication
 
 import android.app.TimePickerDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +15,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -33,41 +37,52 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mindtrace.data.local.entity.MedicationReminderEntity
+import com.mindtrace.data.local.entity.MedicationIntakeEntity
+import com.mindtrace.domain.model.IntakeStatus
+import com.mindtrace.domain.model.MedicationSkipReason
 import com.mindtrace.domain.model.MedicationRecurrenceType
 import com.mindtrace.ui.components.formatTime
 import com.mindtrace.ui.components.MedicationSkipDialog
 import com.mindtrace.ui.components.statusText
+import com.mindtrace.ui.components.label
 import com.mindtrace.ui.i18n.LocalMindTraceStrings
+import com.mindtrace.ui.state.MedicationStatisticsPeriod
 import com.mindtrace.ui.theme.MindTraceTheme
 import com.mindtrace.ui.viewmodel.MedicationViewModel
 import java.time.Instant
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 
 @Composable
 fun MedicationScreen(viewModel: MedicationViewModel, openExactAlarmSettings: () -> Unit) {
     val state by viewModel.state.collectAsState()
     var editReminder by remember { mutableStateOf<MedicationReminderEntity?>(null) }
+    var deleteReminder by remember { mutableStateOf<MedicationReminderEntity?>(null) }
     var dialogOpen by remember { mutableStateOf(false) }
     var skipReminderId by remember { mutableStateOf<Long?>(null) }
     MedicationContent(
         reminders = state.reminders,
-        intakesByReminderId = state.intakesToday.associateBy { it.reminderId },
+        intakesToday = state.intakesToday,
+        intakesInStatisticsPeriod = state.intakesInStatisticsPeriod,
+        statisticsPeriod = state.statisticsPeriod,
         exactAlarmAllowed = state.exactAlarmAllowed,
         notificationsAllowed = state.notificationsAllowed,
         onAdd = { dialogOpen = true },
         onEdit = { editReminder = it },
-        onDelete = viewModel::delete,
         onEnabled = viewModel::setEnabled,
         onTaken = viewModel::markTaken,
         onSkip = { skipReminderId = it },
+        onStatisticsPeriodChanged = viewModel::setStatisticsPeriod,
         openExactAlarmSettings = openExactAlarmSettings
     )
     if (dialogOpen) {
         ReminderDialog(
             reminder = null,
             onDismiss = { dialogOpen = false },
+            onDelete = null,
             onSave = { name, dosage, times, enabled, recurrenceType, weekdays, intervalDays ->
                 viewModel.create(name, dosage, times, enabled, recurrenceType, weekdays, intervalDays)
                 dialogOpen = false
@@ -83,10 +98,32 @@ fun MedicationScreen(viewModel: MedicationViewModel, openExactAlarmSettings: () 
             }
         )
     }
+    deleteReminder?.let { reminder ->
+        AlertDialog(
+            onDismissRequest = { deleteReminder = null },
+            title = { Text(LocalMindTraceStrings.current.deleteMedicationTitle) },
+            text = { Text(LocalMindTraceStrings.current.deleteMedicationText.format(reminder.medicationName)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.delete(reminder)
+                        deleteReminder = null
+                    }
+                ) { Text(LocalMindTraceStrings.current.delete) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteReminder = null }) { Text(LocalMindTraceStrings.current.cancel) }
+            }
+        )
+    }
     editReminder?.let { current ->
         ReminderDialog(
             reminder = current,
             onDismiss = { editReminder = null },
+            onDelete = {
+                deleteReminder = current
+                editReminder = null
+            },
             onSave = { name, dosage, times, enabled, recurrenceType, weekdays, intervalDays ->
                 viewModel.update(
                     current.copy(
@@ -113,15 +150,17 @@ fun MedicationScreen(viewModel: MedicationViewModel, openExactAlarmSettings: () 
 @Composable
 private fun MedicationContent(
     reminders: List<MedicationReminderEntity>,
-    intakesByReminderId: Map<Long, com.mindtrace.data.local.entity.MedicationIntakeEntity>,
+    intakesToday: List<MedicationIntakeEntity>,
+    intakesInStatisticsPeriod: List<MedicationIntakeEntity>,
+    statisticsPeriod: MedicationStatisticsPeriod,
     exactAlarmAllowed: Boolean,
     notificationsAllowed: Boolean,
     onAdd: () -> Unit,
     onEdit: (MedicationReminderEntity) -> Unit,
-    onDelete: (MedicationReminderEntity) -> Unit,
     onEnabled: (MedicationReminderEntity, Boolean) -> Unit,
     onTaken: (Long) -> Unit,
     onSkip: (Long) -> Unit,
+    onStatisticsPeriodChanged: (MedicationStatisticsPeriod) -> Unit,
     openExactAlarmSettings: () -> Unit
 ) {
     val strings = LocalMindTraceStrings.current
@@ -131,6 +170,14 @@ private fun MedicationContent(
                 Text(strings.medications, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
                 Button(onClick = onAdd) { Text(strings.addNew) }
             }
+        }
+        item {
+            MedicationStatistics(
+                reminders = reminders,
+                intakes = intakesInStatisticsPeriod,
+                statisticsPeriod = statisticsPeriod,
+                onStatisticsPeriodChanged = onStatisticsPeriodChanged
+            )
         }
         if (!notificationsAllowed) item {
             Card(Modifier.fillMaxWidth()) {
@@ -149,7 +196,7 @@ private fun MedicationContent(
             Card(Modifier.fillMaxWidth()) { Text(strings.noReminders, Modifier.padding(16.dp)) }
         }
         items(reminders, key = { it.id }) { reminder ->
-            val intake = intakesByReminderId[reminder.id]
+            val intake = intakesToday.firstOrNull { it.reminderId == reminder.id }
             val scheduledToday = reminder.occursOn(LocalDate.now())
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -166,14 +213,29 @@ private fun MedicationContent(
                                 }
                             )
                         }
-                        Switch(checked = reminder.enabled, onCheckedChange = { onEnabled(reminder, it) })
+                        Column(horizontalAlignment = Alignment.End) {
+                            IconButton(onClick = { onEdit(reminder) }) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = strings.edit
+                                )
+                            }
+                            Switch(checked = reminder.enabled, onCheckedChange = { onEnabled(reminder, it) })
+                        }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { onEdit(reminder) }) { Text(strings.edit) }
-                        TextButton(onClick = { onDelete(reminder) }) { Text(strings.delete) }
-                        if (scheduledToday && intake == null) {
-                            TextButton(onClick = { onTaken(reminder.id) }) { Text(strings.markDone) }
-                            TextButton(onClick = { onSkip(reminder.id) }) { Text(strings.notTaken) }
+                    if (scheduledToday && intake == null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                modifier = Modifier.weight(1f),
+                                onClick = { onSkip(reminder.id) }
+                            ) { Text(strings.skipMedication) }
+                            Button(
+                                modifier = Modifier.weight(1f),
+                                onClick = { onTaken(reminder.id) }
+                            ) { Text(strings.markDone) }
                         }
                     }
                 }
@@ -183,9 +245,120 @@ private fun MedicationContent(
 }
 
 @Composable
+private fun MedicationStatistics(
+    reminders: List<MedicationReminderEntity>,
+    intakes: List<MedicationIntakeEntity>,
+    statisticsPeriod: MedicationStatisticsPeriod,
+    onStatisticsPeriodChanged: (MedicationStatisticsPeriod) -> Unit
+) {
+    val strings = LocalMindTraceStrings.current
+    val today = LocalDate.now()
+    val startDate = statisticsPeriod.startDate(today)
+    val scheduledIntakes = generateSequence(startDate) { date ->
+        date.plusDays(1).takeIf { !it.isAfter(today) }
+    }.flatMap { date ->
+        reminders.asSequence()
+            .filter { reminder -> reminder.isScheduledOn(date) }
+            .map { reminder -> reminder to date }
+    }.toList()
+    val intakesByReminderAndDate = intakes.associateBy { it.reminderId to it.scheduledDate }
+    val taken = scheduledIntakes.mapNotNull { scheduledIntake ->
+        intakesByReminderAndDate[scheduledIntake.first.id to scheduledIntake.second]
+            ?.takeIf { it.status == IntakeStatus.TAKEN }
+            ?.let { scheduledIntake to it }
+    }
+    val skipped = scheduledIntakes.mapNotNull { scheduledIntake ->
+        intakesByReminderAndDate[scheduledIntake.first.id to scheduledIntake.second]
+            ?.takeIf { it.status == IntakeStatus.SKIPPED }
+            ?.let { scheduledIntake to it }
+    }
+    val onTimeTaken = taken.count { (_, intake) ->
+        intake.completedAt != null && !intake.completedAt.isAfter(intake.scheduledDateTime.plus(ON_TIME_GRACE_MINUTES, ChronoUnit.MINUTES))
+    }
+    val open = scheduledIntakes.size - taken.size - skipped.size
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(strings.medicationStatistics, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MedicationStatisticsPeriod.values().forEach { period ->
+                    FilterChip(
+                        selected = statisticsPeriod == period,
+                        onClick = { onStatisticsPeriodChanged(period) },
+                        label = { Text(period.label(strings)) }
+                    )
+                }
+            }
+            if (scheduledIntakes.isEmpty()) {
+                Text(strings.noScheduledIntakes, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                if (onTimeTaken == scheduledIntakes.size) {
+                    Text(strings.allIntakesOnTime, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+                } else {
+                    Text(strings.onTimeIntakes.format(onTimeTaken, scheduledIntakes.size))
+                }
+                if (open > 0) {
+                    val openLabel = if (statisticsPeriod == MedicationStatisticsPeriod.TODAY) {
+                        strings.openIntakes
+                    } else {
+                        strings.undocumentedIntakes
+                    }
+                    Text(openLabel.format(open), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                Text("${strings.takenIntakes}: ${taken.size}")
+                Text("${strings.skippedIntakes}: ${skipped.size}")
+
+                if (statisticsPeriod == MedicationStatisticsPeriod.TODAY && taken.isNotEmpty()) {
+                    Text(strings.takenIntakes, style = MaterialTheme.typography.labelLarge)
+                    taken.forEach { (scheduledIntake, intake) ->
+                        val reminder = scheduledIntake.first
+                        Text("${reminder.medicationName} · ${strings.scheduledAt.format(reminder.reminderTime.formatTime())} · ${intake.completedAt?.let { strings.takenAt.format(it.formatLocalTime()) } ?: strings.statusTaken}")
+                    }
+                }
+                if (statisticsPeriod == MedicationStatisticsPeriod.TODAY && skipped.isNotEmpty()) {
+                    Text(strings.skippedIntakes, style = MaterialTheme.typography.labelLarge)
+                    skipped.forEach { (scheduledIntake, intake) ->
+                        val reminder = scheduledIntake.first
+                        val reason = intake.skipReason?.label(strings).orEmpty().let { label ->
+                            if (intake.skipReason == MedicationSkipReason.OTHER && !intake.skipNote.isNullOrBlank()) "$label: ${intake.skipNote}" else label
+                        }
+                        Text("${reminder.medicationName} · ${strings.scheduledAt.format(reminder.reminderTime.formatTime())}")
+                        Text(
+                            "${intake.completedAt?.let { strings.notTakenAt.format(it.formatLocalTime(), reason) } ?: strings.notTaken} · ${strings.reason.format(reason)}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun MedicationStatisticsPeriod.startDate(today: LocalDate): LocalDate = when (this) {
+    MedicationStatisticsPeriod.TODAY -> today
+    MedicationStatisticsPeriod.WEEK -> today.minusDays(6)
+    MedicationStatisticsPeriod.MONTH -> today.minusDays(29)
+}
+
+private fun MedicationStatisticsPeriod.label(strings: com.mindtrace.ui.i18n.MindTraceStrings): String = when (this) {
+    MedicationStatisticsPeriod.TODAY -> strings.today
+    MedicationStatisticsPeriod.WEEK -> strings.lastWeek
+    MedicationStatisticsPeriod.MONTH -> strings.lastMonth
+}
+
+private fun MedicationReminderEntity.isScheduledOn(date: LocalDate): Boolean =
+    enabled && occursOn(date) && !date.isBefore(createdAt.atZone(ZoneId.systemDefault()).toLocalDate())
+
+private fun Instant.formatLocalTime(): String = atZone(ZoneId.systemDefault()).toLocalTime().formatTime()
+
+private const val ON_TIME_GRACE_MINUTES = 30L
+
+@Composable
 private fun ReminderDialog(
     reminder: MedicationReminderEntity?,
     onDismiss: () -> Unit,
+    onDelete: (() -> Unit)?,
     onSave: (String, String?, List<LocalTime>, Boolean, MedicationRecurrenceType, Set<DayOfWeek>, Int?) -> Unit
 ) {
     val strings = LocalMindTraceStrings.current
@@ -315,7 +488,14 @@ private fun ReminderDialog(
                 }
             }) { Text(strings.save) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(strings.cancel) } }
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                onDelete?.let { delete ->
+                    TextButton(onClick = delete) { Text(strings.delete) }
+                }
+                TextButton(onClick = onDismiss) { Text(strings.cancel) }
+            }
+        }
     )
 }
 
@@ -345,15 +525,17 @@ private fun MedicationPreview() {
     MindTraceTheme {
         MedicationContent(
             reminders = listOf(MedicationReminderEntity(1, "Beispielmedikament", "10 mg", LocalTime.of(8, 0), true, Instant.now())),
-            intakesByReminderId = emptyMap(),
+            intakesToday = emptyList(),
+            intakesInStatisticsPeriod = emptyList(),
+            statisticsPeriod = MedicationStatisticsPeriod.TODAY,
             exactAlarmAllowed = false,
             notificationsAllowed = true,
             onAdd = {},
             onEdit = {},
-            onDelete = {},
             onEnabled = { _, _ -> },
             onTaken = {},
             onSkip = {},
+            onStatisticsPeriodChanged = {},
             openExactAlarmSettings = {}
         )
     }

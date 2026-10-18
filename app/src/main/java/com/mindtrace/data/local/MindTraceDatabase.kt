@@ -24,7 +24,7 @@ import com.mindtrace.data.local.entity.MoodEntryEntity
         MedicationReminderEntity::class,
         MedicationIntakeEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(
@@ -44,27 +44,36 @@ abstract class MindTraceDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_1_2)
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
+                .addMigrations(MIGRATION_4_5)
                 .fallbackToDestructiveMigration(false)
                 .build()
 
         private val MIGRATION_1_2 = object : Migration(1, 2) {
-            override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("ALTER TABLE medication_reminders ADD COLUMN recurrenceType TEXT NOT NULL DEFAULT 'DAILY'")
-                database.execSQL("ALTER TABLE medication_reminders ADD COLUMN recurrenceWeekdays TEXT")
-                database.execSQL("ALTER TABLE medication_reminders ADD COLUMN recurrenceIntervalDays INTEGER")
-                database.execSQL("ALTER TABLE medication_reminders ADD COLUMN recurrenceStartDate TEXT")
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE medication_reminders ADD COLUMN recurrenceType TEXT NOT NULL DEFAULT 'DAILY'")
+                db.execSQL("ALTER TABLE medication_reminders ADD COLUMN recurrenceWeekdays TEXT")
+                db.execSQL("ALTER TABLE medication_reminders ADD COLUMN recurrenceIntervalDays INTEGER")
+                db.execSQL("ALTER TABLE medication_reminders ADD COLUMN recurrenceStartDate TEXT")
             }
         }
 
         private val MIGRATION_2_3 = object : Migration(2, 3) {
-            override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("ALTER TABLE medication_intakes ADD COLUMN skipReason TEXT")
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE medication_intakes ADD COLUMN skipReason TEXT")
             }
         }
 
         private val MIGRATION_3_4 = object : Migration(3, 4) {
-            override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("ALTER TABLE medication_intakes ADD COLUMN skipNote TEXT")
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE medication_intakes ADD COLUMN skipNote TEXT")
+            }
+        }
+
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE mood_entries ADD COLUMN physicalWellbeing INTEGER NOT NULL DEFAULT 3")
+                db.execSQL("ALTER TABLE mood_entries ADD COLUMN mentalWellbeing INTEGER NOT NULL DEFAULT 3")
+                db.execSQL("UPDATE mood_entries SET physicalWellbeing = moodValue, mentalWellbeing = moodValue")
             }
         }
     }

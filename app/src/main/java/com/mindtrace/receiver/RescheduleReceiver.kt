@@ -13,7 +13,11 @@ class RescheduleReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                (context.applicationContext as MindTraceApp).container.medicationRepository.rescheduleEnabled()
+                val container = (context.applicationContext as MindTraceApp).container
+                container.medicationRepository.rescheduleEnabled()
+                container.settingsStore.read().takeIf { it.moodReminderEnabled }?.let {
+                    container.moodAlarmScheduler.schedule(it.moodReminderTime)
+                }
             } finally {
                 pending.finish()
             }
