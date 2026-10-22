@@ -107,6 +107,7 @@ private fun SettingsContent(
 ) {
     val strings = LocalMindTraceStrings.current
     var userName by rememberSaveable(settings.userName) { mutableStateOf(settings.userName.orEmpty()) }
+    var showReleaseNotes by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val appVersion = remember(context) {
         context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
@@ -247,13 +248,21 @@ private fun SettingsContent(
             }
         }
         item {
-            Text(
-                text = "${strings.appVersion} $appVersion",
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            OutlinedButton(
+                onClick = { showReleaseNotes = true },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("${strings.appVersion} $appVersion") }
         }
+    }
+    if (showReleaseNotes) {
+        AlertDialog(
+            onDismissRequest = { showReleaseNotes = false },
+            title = { Text("${strings.releaseNotes} $appVersion") },
+            text = { Text(strings.releaseNotesContent) },
+            confirmButton = {
+                TextButton(onClick = { showReleaseNotes = false }) { Text(strings.close) }
+            }
+        )
     }
 }
 

@@ -21,7 +21,7 @@ class ViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T = when (modelClass) {
         TodayViewModel::class.java -> TodayViewModel(moodRepository, medicationRepository)
         MoodViewModel::class.java -> MoodViewModel(moodRepository, settingsStore, moodAlarmScheduler)
-        MedicationViewModel::class.java -> MedicationViewModel(medicationRepository, scheduler)
+        MedicationViewModel::class.java -> MedicationViewModel(medicationRepository, scheduler, settingsStore)
         SettingsViewModel::class.java -> SettingsViewModel(settingsStore, testDataRepository)
         else -> error("Unbekanntes ViewModel: ${modelClass.name}")
     } as T

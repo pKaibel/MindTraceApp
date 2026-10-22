@@ -159,12 +159,14 @@ private fun MoodContent(
         item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(strings.physicalWellbeing, style = MaterialTheme.typography.titleMedium)
-                    MoodChart(entries, valueFor = { it.physicalWellbeing })
-                    Text("${strings.average}: ${physicalAverage?.let { "%.1f".format(it) } ?: "-"}")
-                    Text(strings.mentalWellbeing, style = MaterialTheme.typography.titleMedium)
-                    MoodChart(entries, valueFor = { it.mentalWellbeing })
-                    Text("${strings.average}: ${mentalAverage?.let { "%.1f".format(it) } ?: "-"}")
+                    Text(strings.moodTrendValues, style = MaterialTheme.typography.titleMedium)
+                    MoodChart(
+                        entries = entries,
+                        physicalLabel = strings.physicalWellbeing,
+                        mentalLabel = strings.mentalWellbeing
+                    )
+                    Text("${strings.physicalWellbeing} – ${strings.average}: ${physicalAverage?.let { "%.1f".format(it) } ?: "-"}")
+                    Text("${strings.mentalWellbeing} – ${strings.average}: ${mentalAverage?.let { "%.1f".format(it) } ?: "-"}")
                     Text("${strings.entries}: ${entries.size}")
                 }
             }

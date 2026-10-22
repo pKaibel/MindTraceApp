@@ -72,7 +72,7 @@ class MainActivity : ComponentActivity() {
             container.testDataRepository
         )
         val startDestination = if (moodEntryRequest > 0) {
-            MindTraceRoute.Mood.route
+            MindTraceRoute.NewMoodEntry.route
         } else {
             MindTraceRoute.Today.route
         }
@@ -163,7 +163,7 @@ private fun MindTraceAppContent(
     val strings = LocalMindTraceStrings.current
     LaunchedEffect(moodEntryRequest) {
         if (moodEntryRequest > 0) {
-            navController.navigate(MindTraceRoute.Mood.route) {
+            navController.navigate(MindTraceRoute.NewMoodEntry.route) {
                 popUpTo(MindTraceRoute.Today.route) { inclusive = false }
                 launchSingleTop = true
             }
@@ -174,10 +174,13 @@ private fun MindTraceAppContent(
             val backStack = navController.currentBackStackEntryAsState().value
             NavigationBar {
                 items.forEach { route ->
-                    val selected = backStack?.destination?.hierarchy?.any { it.route == route.route } == true
+                    val selected = backStack?.destination?.hierarchy?.any { destination ->
+                        destination.route == route.route ||
+                            (route == MindTraceRoute.Mood && destination.route == MindTraceRoute.NewMoodEntry.route)
+                    } == true
                     val label = when (route) {
                         MindTraceRoute.Today -> strings.today
-                        MindTraceRoute.Mood -> strings.mood
+                        MindTraceRoute.Mood, MindTraceRoute.NewMoodEntry -> strings.mood
                         MindTraceRoute.Medication -> strings.medication
                         MindTraceRoute.Settings -> strings.settings
                     }
@@ -193,7 +196,7 @@ private fun MindTraceAppContent(
                             Icon(
                                 imageVector = when (route) {
                                     MindTraceRoute.Today -> Icons.Default.Home
-                                    MindTraceRoute.Mood -> Icons.Default.BarChart
+                                    MindTraceRoute.Mood, MindTraceRoute.NewMoodEntry -> Icons.Default.BarChart
                                     MindTraceRoute.Medication -> Icons.Default.Medication
                                     MindTraceRoute.Settings -> Icons.Default.Settings
                                 },
@@ -222,6 +225,14 @@ private fun MindTraceAppContent(
                 )
             }
             composable(MindTraceRoute.Mood.route) {
+                val vm: MoodViewModel = viewModel(factory = factory)
+                MoodScreen(
+                    viewModel = vm,
+                    mascot = mascot,
+                    openNewEntryRequest = 0
+                )
+            }
+            composable(MindTraceRoute.NewMoodEntry.route) {
                 val vm: MoodViewModel = viewModel(factory = factory)
                 MoodScreen(
                     viewModel = vm,

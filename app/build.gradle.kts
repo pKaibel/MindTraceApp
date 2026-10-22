@@ -17,6 +17,20 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    buildTypes {
+        // Test APKs are distributed directly. Shrink them to avoid long first-time
+        // sideload installs while retaining the existing debug certificate.
+        debug {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            testProguardFiles("proguard-rules.pro")
+        }
+    }
+
     buildFeatures {
         compose = true
     }

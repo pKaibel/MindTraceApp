@@ -8,8 +8,8 @@ import com.mindtrace.data.repository.MoodRepository
 import com.mindtrace.ui.state.MoodUiState
 import com.mindtrace.util.MindTraceSettingsStore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -25,8 +25,10 @@ class MoodViewModel(
     private val settingsStore: MindTraceSettingsStore,
     private val moodAlarmScheduler: MoodAlarmScheduler
 ) : ViewModel() {
-    private val days = MutableStateFlow(7)
-    private val moodState = days.flatMapLatest { selected ->
+    private val moodState = settingsStore.settings
+        .map { it.moodTrendDays }
+        .distinctUntilChanged()
+        .flatMapLatest { selected ->
         repository.observeSince(Instant.now().minus(selected.toLong(), ChronoUnit.DAYS)).map { entries ->
             MoodUiState(
                 entries = entries,
@@ -43,7 +45,7 @@ class MoodViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MoodUiState())
 
-    fun setDays(value: Int) { days.value = value }
+    fun setDays(value: Int) = settingsStore.setMoodTrendDays(value)
 
     fun save(physicalWellbeing: Int, mentalWellbeing: Int, note: String?) = viewModelScope.launch {
         runCatching { repository.save(physicalWellbeing, mentalWellbeing, note) }

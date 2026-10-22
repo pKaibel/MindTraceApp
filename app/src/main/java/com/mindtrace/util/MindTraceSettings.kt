@@ -15,7 +15,9 @@ data class MindTraceSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val languageMode: LanguageMode = LanguageMode.DE,
     val hasSelectedMascot: Boolean = false,
-    val mascot: Mascot = Mascot.LUMI
+    val mascot: Mascot = Mascot.LUMI,
+    val moodTrendDays: Int = 7,
+    val medicationStatisticsPeriod: String = "TODAY"
 )
 
 enum class ThemeMode {
@@ -60,7 +62,14 @@ class MindTraceSettingsStore(context: Context) {
                 ?.let { runCatching { LanguageMode.valueOf(it) }.getOrNull() }
                 ?: LanguageMode.DE,
             hasSelectedMascot = selectedMascot != null,
-            mascot = selectedMascot ?: Mascot.LUMI
+            mascot = selectedMascot ?: Mascot.LUMI,
+            moodTrendDays = prefs.getInt(KEY_MOOD_TREND_DAYS, DEFAULT_MOOD_TREND_DAYS)
+                .takeIf { it in MOOD_TREND_DAYS }
+                ?: DEFAULT_MOOD_TREND_DAYS,
+            medicationStatisticsPeriod = prefs.getString(
+                KEY_MEDICATION_STATISTICS_PERIOD,
+                DEFAULT_MEDICATION_STATISTICS_PERIOD
+            ) ?: DEFAULT_MEDICATION_STATISTICS_PERIOD
         )
     }
 
@@ -94,6 +103,17 @@ class MindTraceSettingsStore(context: Context) {
         stateFlow.value = read()
     }
 
+    fun setMoodTrendDays(days: Int) {
+        require(days in MOOD_TREND_DAYS)
+        prefs.edit().putInt(KEY_MOOD_TREND_DAYS, days).apply()
+        stateFlow.value = read()
+    }
+
+    fun setMedicationStatisticsPeriod(period: String) {
+        prefs.edit().putString(KEY_MEDICATION_STATISTICS_PERIOD, period).apply()
+        stateFlow.value = read()
+    }
+
     fun onboardingReason(versionCode: Long): OnboardingReason? {
         return when (prefs.getLong(KEY_ONBOARDING_VERSION, NO_ONBOARDING_VERSION)) {
             versionCode -> null
@@ -122,9 +142,14 @@ class MindTraceSettingsStore(context: Context) {
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_LANGUAGE_MODE = "language_mode"
         private const val KEY_MASCOT = "mascot"
+        private const val KEY_MOOD_TREND_DAYS = "mood_trend_days"
+        private const val KEY_MEDICATION_STATISTICS_PERIOD = "medication_statistics_period"
         private const val KEY_ONBOARDING_VERSION = "onboarding_version"
         private const val NO_ONBOARDING_VERSION = -1L
         private const val DEFAULT_MOOD_REMINDER_HOUR = 20
         private const val DEFAULT_MOOD_REMINDER_MINUTE = 0
+        private const val DEFAULT_MOOD_TREND_DAYS = 7
+        private const val DEFAULT_MEDICATION_STATISTICS_PERIOD = "TODAY"
+        private val MOOD_TREND_DAYS = setOf(7, 30, 90)
     }
 }

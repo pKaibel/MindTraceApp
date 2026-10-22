@@ -9,22 +9,30 @@ import com.mindtrace.domain.model.MedicationRecurrenceType
 import com.mindtrace.domain.model.MedicationSkipReason
 import com.mindtrace.ui.state.MedicationStatisticsPeriod
 import com.mindtrace.ui.state.MedicationUiState
+import com.mindtrace.util.MindTraceSettingsStore
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.DayOfWeek
 import java.time.LocalTime
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class MedicationViewModel(
     private val repository: MedicationRepository,
-    private val scheduler: AndroidMedicationAlarmScheduler
+    private val scheduler: AndroidMedicationAlarmScheduler,
+    private val settingsStore: MindTraceSettingsStore
 ) : ViewModel() {
     private val message = MutableStateFlow<String?>(null)
-    private val statisticsPeriod = MutableStateFlow(MedicationStatisticsPeriod.TODAY)
+    private val statisticsPeriod = settingsStore.settings
+        .map { it.medicationStatisticsPeriod.toMedicationStatisticsPeriod() }
+        .distinctUntilChanged()
     private val statisticsIntakes = statisticsPeriod.flatMapLatest { period ->
         val today = LocalDate.now()
         repository.observeIntakes(period.startDate(today), today)
@@ -75,7 +83,7 @@ class MedicationViewModel(
     fun delete(reminder: MedicationReminderEntity) = viewModelScope.launch { repository.delete(reminder) }
     fun setEnabled(reminder: MedicationReminderEntity, enabled: Boolean) = viewModelScope.launch { repository.setEnabled(reminder, enabled) }
     fun setStatisticsPeriod(period: MedicationStatisticsPeriod) {
-        statisticsPeriod.value = period
+        settingsStore.setMedicationStatisticsPeriod(period.name)
     }
     fun markTaken(reminderId: Long) = viewModelScope.launch { repository.markTaken(reminderId) }
     fun markSkipped(reminderId: Long, reason: MedicationSkipReason, note: String?) = viewModelScope.launch {
@@ -88,3 +96,6 @@ private fun MedicationStatisticsPeriod.startDate(today: LocalDate): LocalDate = 
     MedicationStatisticsPeriod.WEEK -> today.minusDays(6)
     MedicationStatisticsPeriod.MONTH -> today.minusDays(29)
 }
+
+private fun String.toMedicationStatisticsPeriod(): MedicationStatisticsPeriod =
+    runCatching { MedicationStatisticsPeriod.valueOf(this) }.getOrDefault(MedicationStatisticsPeriod.TODAY)
